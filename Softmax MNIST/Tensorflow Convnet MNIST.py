@@ -3,8 +3,6 @@ import numpy as np
 from tensorflow.python.framework import ops
 import matplotlib.pyplot as plt
 
-x_dim = None
-
 def one_hot_mat(y, n_classes):
     """
 
@@ -26,17 +24,15 @@ def one_hot_mat(y, n_classes):
     return one_hot
 
 
-def create_placeholders(n_h,n_w,n_c,n_y):
+def create_placeholders(n_x,n_y):
     """
 
-    :param n_h: pixel height dimension
-    :param n_w: pixel width dimension
-    :param n_c: RGB channel dimension
-    :param n_y: num classes/dimension for y
-    :return: tensorflow placeholder variables
+    :param n_x: dimensions of X data example
+    :param n_y: dimensions of Y data example
+    :return: tensorflow variable placeholders
     """
 
-    x = tf.placeholder(tf.float32,shape=[None,n_h,n_w,n_c])
+    x = tf.placeholder(tf.float32,shape=[None,n_x])
     y = tf.placeholder(tf.float32,shape=[None,n_y])
 
     return x,y
@@ -47,43 +43,106 @@ def create_filter(f_height,f_width,n_input,n_filters):
 
     return filter
 
-def conv2d(x,,filter,strides,padding,bias):
+def create_conv_parameters(f_sizes,bias=True):
+    parameters = {}
+    if bias:
+        for i,size in enumerate(f_sizes):
+            parameters['F'+str(i)] = tf.get_variable('F'+str(i),shape=size,initializer=tf.contrib.layers.xavier_initializer(seed=1))
+            parameters['b'+str(i)] = tf.get_variable('b'+str(i),shape=size[3],initializer=tf.zeros_initializer())
+    else:
+        for i, size in enumerate(f_sizes):
+            parameters['F' + str(i)] = tf.get_variable('F' + str(i), shape=size,initializer=tf.contrib.layers.xavier_initializer(seed=1))
+
+    return parameters
+
+def create_dense_parameters(sizes,bias=True):
+    parameters = {}
+    if bias:
+        for i, size in enumerate(sizes):
+            parameters['W' + str(i)] = tf.get_variable('W' + str(i), shape=size,initializer=tf.contrib.layers.xavier_initializer(seed=1))
+            parameters['b' + str(i)] = tf.get_variable('b' + str(i), shape=size[3], initializer=tf.zeros_initializer())
+    else:
+        for i, size in enumerate(sizes):
+            parameters['W' + str(i)] = tf.get_variable('W' + str(i), shape=size,initializer=tf.contrib.layers.xavier_initializer(seed=1))
+
+    return parameters
+
+###################################################
+"""DEFINING CONVOLUTION MODEL STEPS"""
+###################################################
+def conv2d(x,filter,strides,padding,bias):
     x = tf.nn.conv2d(x,filter,strides=[1,strides,strides,1],padding=padding)
     x = tf.nn.bias_add(x,bias)
+    return tf.nn.relu(x)
 
-def forward_propagate(X,parameters):
+def maxpool2d(x,k=2,pad='SAME'):
+    return tf.nn.max_pool(x,ksize=[1,k,k,1],strides=[1,k,k,1],padding=pad)
+
+def avgpool2d(x,k=2,pad='SAME'):
+    return tf.nn.avg_pool(x,ksize=[1,k,k,1],strides=[1,k,k,1],padding=pad)
+
+def flatten(x):
+    return tf.layers.flatten(x,name="flat_layer")
+
+def dense(x,W,b):
+    x = tf.add(tf.matmul(W,x),b)
+    return tf.nn.relu(x)
+
+def dropout(x):
+    return tf.nn.dropout(x,keep_prob=0.8)
+
+def residual(x):
+    pass
+
+valid_steps = ['conv2d','max_pool','avg_pool','flatten','dense','dropout','residual']
+
+def conv_net(X,steps,conv_parameters,dense_parameters):
     """
-
-    :param X: feature matrix to propagate through
-    :param parameters: tensorflow parameter variable dictionary
-    :return: forward propagate output WITHOUT passing activation function on last layer.
+    :param X: Input tensor
+    :param steps: list of steps for the convolutional network to take
+    :param conv_parameters: the stored convolutional parameters
+    :param dense_parameters:  the stored dense or fully connected network parameters
+    :return: output result tensor. e.g. if Softmax with n_classes output would be tensor of size n_classes
     """
-    ####First try block assumes there is bias parameters. Error will incur if there is none and will try without bias.
-    try:
-        temp = list(parameters.keys())
-        param_list = [(temp[i],temp[i+1]) for i in range(0,len(temp),2)] #Creating pairwise zip object for each weight and bias
-        holder = tf.add(tf.matmul(parameters[param_list[0][0]],X),parameters[param_list[0][1]])
-        holder = tf.nn.relu(holder)
-        for W,b in param_list[1:-1]:
-            holder = tf.add(tf.matmul(parameters[W],holder),parameters[b])
-            holder = tf.nn.relu(holder)
+    X_in = X
+    conv_indexer = 0
+    conv_keys = list(conv_parameters.keys())
 
-        holder = tf.add(tf.matmul(parameters[param_list[-1][0]],holder),parameters[param_list[-1][1]])
-        return holder
-    except:
-        try:
-            param_list = list(parameters.keys())
-            holder = tf.matmul(parameters[param_list[0]],X)
-            holder = tf.nn.relu(holder)
-            for W in param_list[1:-1]:
-                holder = tf.matmul(parameters[W],holder)
-                holder = tf.nn.relu(holder)
+    dense_indexer = 0
+    dense_keys = list(dense_parameters.keys())
 
-            holder = tf.add(tf.matmul(parameters[param_list[-1][0]], holder), parameters[param_list[-1][1]])
-            return holder
-        except:
-            "Failed operation running 'forward_propagate' function"
+    initial = 0
 
+    if steps[0] == 'conv2d':
+        initial = conv2d(X, conv_parameters[conv_keys[conv_indexer]], strides=1, padding="SAME",
+                         bias=conv_parameters[conv_keys[conv_indexer + 1]])
+        conv_indexer += 2
+    elif steps[0] == 'conv2d':
+        initial = flatten(X)
+    elif steps[0] == 'conv2d':
+        initial = residual(X)
+
+    for step in steps[1:]:
+        if step == 'conv2d':
+            initial = conv2d(initial,conv_parameters[conv_keys[conv_indexer]], strides=1, padding="SAME",
+                         bias=conv_parameters[conv_keys[conv_indexer + 1]])
+            conv_indexer += 2
+        elif step == 'max_pool':
+            initial = max_pool2d(initial)
+        elif step == 'avg_pool':
+            initial = avgpool2d(initial)
+        elif step == 'flatten':
+            initial = flatten(initial)
+        elif step == 'dense':
+            initial = dense(initial, dense_parameters[dense_keys[dense_indexer]],
+                            dense_parameters[dense_keys[dense_indexer + 1]])
+            dense_indexer += 2
+        elif step == 'dropout':
+            initial = dropout(initial)
+        elif step == 'residual':
+            initial = residual(initial)
+
+    return initial
 
 def compute_cost(predictions,y,loss_type=None):
 
@@ -99,12 +158,12 @@ def compute_cost(predictions,y,loss_type=None):
 
 
 def model(X_train,X_test,Y_train,Y_test,
-          layer_dims=[],lr=0.0001,
+          filter_sizes,layer_dims,conv_steps,lr=0.0001,
           epochs=1500,batch_size=16,print_cost=True):
 
 
     ops.reset_default_graph()
-    tf.set_random_seed(123)
+    tf.set_random_seed(1)
 
     costs = []
 
@@ -117,11 +176,12 @@ def model(X_train,X_test,Y_train,Y_test,
 
     ####CREATE TENSOR PARAMETER VARIABLES TO FEED DATA INTO PARAMETERS####
 
-    parameters = create_parameters(parameter_dimensions=layer_dims)
+    conv_parameters = create_conv_parameters(filter_sizes)
+    dense_parameters = create_dense_parameters(layer_dims)
 
     ####FEED DATA TO PROPAGATE THROUGH THE TENSOR GRAPH####
 
-    layer_out = forward_propagate(X,parameters)
+    layer_out = conv_net(X,steps,conv_parameters,dense_parameters)
 
     ####CREATE COST VERTEX TO CALCULATE COST IN GRAPH####
 
@@ -169,9 +229,9 @@ def model(X_train,X_test,Y_train,Y_test,
                     mb_costs.append(mb_cost)
 
                     epoch_cost += mb_cost/total_batches
-                #plt.plot(np.squeeze(mb_costs))
-                #plt.title("Minibatch Costs")
-                #plt.show()
+                plt.plot(np.squeeze(mb_costs))
+                plt.title("Minibatch Costs")
+                plt.show()
             else:
                 for batch_num in range(total_batches):
                     try:
@@ -221,9 +281,9 @@ if __name__ == "__main__":
 
     params,costs = model(x_train,x_test,y_train,y_test,[(256,784),(128,256),(10,128)],epochs=15,batch_size=100)
 
-    plt.plot(np.squeeze(costs))
+    #plt.plot(np.squeeze(costs))
 
-    plt.ylabel('cost')
-    plt.xlabel('iterations per 5')
-    plt.title("Cost per iteration")
-    plt.show()
+    #plt.ylabel('cost')
+    #plt.xlabel('iterations per 5')
+    #plt.title("Cost per iteration")
+    #plt.show()
