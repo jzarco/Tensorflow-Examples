@@ -117,9 +117,9 @@ def conv_net(X,steps,conv_parameters,dense_parameters):
         initial = conv2d(X, conv_parameters[conv_keys[conv_indexer]], strides=1, padding="SAME",
                          bias=conv_parameters[conv_keys[conv_indexer + 1]])
         conv_indexer += 2
-    elif steps[0] == 'conv2d':
+    elif steps[0] == 'flatten':
         initial = flatten(X)
-    elif steps[0] == 'conv2d':
+    elif steps[0] == 'residual':
         initial = residual(X)
 
     for step in steps[1:]:
@@ -279,7 +279,12 @@ if __name__ == "__main__":
     y_train = one_hot_mat(y_train,10)
     y_test = one_hot_mat(y_test,10)
 
-    params,costs = model(x_train,x_test,y_train,y_test,[(256,784),(128,256),(10,128)],epochs=15,batch_size=100)
+
+    filter_sizes = [32,64,128]
+    steps = ['conv2d','max_pool','conv2d','max_pool','conv2d','max_pool','flatten','dense','dropout']
+    layer_dims = []
+
+    #params,costs = model(x_train,x_test,y_train,y_test,[(256,784),(128,256),(10,128)],epochs=15,batch_size=150)
 
     #plt.plot(np.squeeze(costs))
 
