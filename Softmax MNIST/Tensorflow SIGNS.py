@@ -153,13 +153,6 @@ def model(X_train,X_test,Y_train,Y_test,
     with tf.Session() as sess:
 
         sess.run(init)
-
-        ####SHUFFLE TRAINING DATA#####
-
-        shuffler = np.random.permutation(m)
-
-        X_shuffled = X_train[:, shuffler]
-        Y_shuffled = Y_train[:, shuffler]
         ####TRAINING LOOP####
         for epoch in range(epochs):
             epoch = epoch + 1
@@ -167,6 +160,13 @@ def model(X_train,X_test,Y_train,Y_test,
             mb_costs = []
 
             total_batches = int(m/batch_size)
+
+            ####SHUFFLE TRAINING DATA#####
+
+            shuffler = np.random.permutation(m)
+
+            X_shuffled = X_train[:,shuffler]
+            Y_shuffled = Y_train[:,shuffler].reshape((n_y,m))
 
             if m % batch_size == 0:
                 for batch_num in range(total_batches):
@@ -221,8 +221,8 @@ if __name__ == "__main__":
     (x_train,y_train), (x_test, y_test) = mnist.load_data()
 
     x_train, x_test = x_train/255.0, x_test/255.0
-    x_train = x_train.reshape((60000,28*28)).T
-    x_test = x_test.reshape((10000,28*28)).T
+    x_train = x_train.T.reshape((,60000))
+    x_test = x_test.T.reshape((28*28,10000))
 
     y_train = one_hot_mat(y_train,10)
     y_test = one_hot_mat(y_test,10)
