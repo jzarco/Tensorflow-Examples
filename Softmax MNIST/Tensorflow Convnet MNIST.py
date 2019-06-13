@@ -24,7 +24,7 @@ def one_hot_mat(y, n_classes):
     return one_hot
 
 
-def create_placeholders(n_x,n_y):
+def create_placeholders(n_h,n_w,n_c,n_y):
     """
 
     :param n_x: dimensions of X data example
@@ -32,7 +32,7 @@ def create_placeholders(n_x,n_y):
     :return: tensorflow variable placeholders
     """
 
-    x = tf.placeholder(tf.float32,shape=[None,n_x])
+    x = tf.placeholder(tf.float32,shape=[None,n_h,n_w,n_c])
     y = tf.placeholder(tf.float32,shape=[None,n_y])
 
     return x,y
@@ -59,8 +59,8 @@ def create_dense_parameters(sizes,bias=True):
     parameters = {}
     if bias:
         for i, size in enumerate(sizes):
-            parameters['W' + str(i)] = tf.get_variable('W' + str(i), shape=size,initializer=tf.contrib.layers.xavier_initializer(seed=1))
-            parameters['b' + str(i)] = tf.get_variable('b' + str(i), shape=size[3], initializer=tf.zeros_initializer())
+            parameters['W' + str(i)] = tf.get_variable('W' + str(i), shape=[size[0],size[1]],initializer=tf.contrib.layers.xavier_initializer(seed=1))
+            parameters['b' + str(i)] = tf.get_variable('b' + str(i), shape=[size[0],1], initializer=tf.zeros_initializer())
     else:
         for i, size in enumerate(sizes):
             parameters['W' + str(i)] = tf.get_variable('W' + str(i), shape=size,initializer=tf.contrib.layers.xavier_initializer(seed=1))
@@ -81,8 +81,14 @@ def maxpool2d(x,k=2,pad='SAME'):
 def avgpool2d(x,k=2,pad='SAME'):
     return tf.nn.avg_pool(x,ksize=[1,k,k,1],strides=[1,k,k,1],padding=pad)
 
-def flatten(x):
-    return tf.layers.flatten(x,name="flat_layer")
+def flatten_with_dense(x,W,b):
+    x = tf.layers.flatten(x,name="flat_layer")
+    s = tf.shape(x)
+    layer_size=tf.shape(W)[0]
+    W = tf.get_variable("W_flat",shape=[layer_size,s],initializer=tf.contrib.layers.xavier_initializer(seed=1))
+    b = tf.get_variable("b_flat",shape=[layer_size,1])
+    x = tf.add(tf.matmul(W,x),b)
+    return x
 
 def dense(x,W,b):
     x = tf.add(tf.matmul(W,x),b)
@@ -132,7 +138,8 @@ def conv_net(X,steps,conv_parameters,dense_parameters):
         elif step == 'avg_pool':
             initial = avgpool2d(initial)
         elif step == 'flatten':
-            initial = flatten(initial)
+            initial = flatten_with_dense(initial,dense_parameters[dense_keys[dense_indexer]],dense_parameters[dense_keys[dense_indexer + 1]])
+            dense_indexer += 2
         elif step == 'dense':
             initial = dense(initial, dense_parameters[dense_keys[dense_indexer]],
                             dense_parameters[dense_keys[dense_indexer + 1]])
@@ -167,12 +174,12 @@ def model(X_train,X_test,Y_train,Y_test,
 
     costs = []
 
-    n_x,m = X_train.shape
+    n_h,n_w,m = X_train.shape
     n_y = Y_train.shape[0]
 
     ####CREATE PLACEHOLDERS TO FEED INTO TENSOR VERTEX####
 
-    X,Y = create_placeholders(n_x,n_y)
+    X,Y = create_placeholders(n_h,n_w,1,n_y)
 
     ####CREATE TENSOR PARAMETER VARIABLES TO FEED DATA INTO PARAMETERS####
 
@@ -273,8 +280,8 @@ if __name__ == "__main__":
     (x_train,y_train), (x_test, y_test) = mnist.load_data()
 
     x_train, x_test = x_train/255.0, x_test/255.0
-    x_train = x_train.reshape((60000,28*28)).T
-    x_test = x_test.reshape((10000,28*28)).T
+    x_train = x_train.T
+    x_test = x_test.T
 
     y_train = one_hot_mat(y_train,10)
     y_test = one_hot_mat(y_test,10)
@@ -282,13 +289,30 @@ if __name__ == "__main__":
 
     filter_sizes = [32,64,128]
     steps = ['conv2d','max_pool','conv2d','max_pool','conv2d','max_pool','flatten','dense','dropout']
-    layer_dims = []
+    layer_dims = [(1028,None),(512,1028),(256,128),(10,128)]
 
-    #params,costs = model(x_train,x_test,y_train,y_test,[(256,784),(128,256),(10,128)],epochs=15,batch_size=150)
+    #x,y = create_placeholders(28,28,3,10)
+    #print(x)
+    #print(y)
+    #f = tf.get_variable('F0',shape=[10,10,3,32],initializer=tf.contrib.layers.xavier_initializer(seed=1))
+    #b = tf.get_variable('b0', shape=32, initializer=tf.zeros_initializer())
 
-    #plt.plot(np.squeeze(costs))
+    #W = tf.Variable(tf.random_normal([5, 5, 3, 32]))
+    #b = tf.Variable(tf.random_normal([32]))
 
-    #plt.ylabel('cost')
-    #plt.xlabel('iterations per 5')
-    #plt.title("Cost per iteration")
-    #plt.show()
+    #x = tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
+    #print(x)
+    #x = tf.nn.bias_add(x, b)
+    #print(x)
+
+    #conv = conv2d(x,f,strides=1,padding="SAME",bias=b)
+    #print(conv)
+
+    params,costs = model(x_train,x_test,y_train,y_test,filter_sizes,layer_dims,steps,epochs=15,batch_size=150)
+
+    plt.plot(np.squeeze(costs))
+
+    plt.ylabel('cost')
+    plt.xlabel('iterations')
+    plt.title("Cost per iteration")
+    plt.show()
