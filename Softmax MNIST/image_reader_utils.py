@@ -2,16 +2,15 @@ from PIL import Image
 import numpy as np
 import os
 
-img = Image.open("C:\\Users\\Juan.Zarco\\Documents\\GitHub\\Tensorflow-Examples\\Softmax MNIST\\fruits-360\\Training\\Apple Crimson Snow\\0_100.jpg")
-img.load()
-data = np.asarray(img,dtype="int32")
+#img = Image.open("C:\\Users\\Juan.Zarco\\Documents\\GitHub\\Tensorflow-Examples\\Softmax MNIST\\fruits-360\\Training\\Apple Crimson Snow\\0_100.jpg")
+#img.load()
+#data = np.asarray(img,dtype="int32")
 #print(data.shape)
 #print(data[:,:,0]/255.0)
 
 def read_images(indir=None,normalize=True):
     image_data = []
     for r,d,f in os.walk(indir):
-        print("Reading in root: ",r)
         for fname in f:
             img = Image.open(os.path.join(r,fname))
             img.load()
