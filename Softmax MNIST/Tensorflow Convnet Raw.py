@@ -7,101 +7,14 @@ from tensorflow.python.framework import ops
 """CREATE WRAPPERS FOR CONVOLUTIONAL NETWORK OPERATIONS"""
 ######################################
 
-def conv2d(x,b,filter,strides=1,padding='SAME'):
-    y = tf.nn.conv2d(x,filter,strides=[1,strides,strides,1],padding=padding)
-    y = tf.nn.bias_add(y,b)
-    y = tf.nn.relu(y)
-    return y
+def create_placeholders(n_h,n_w,n_c,n_y):
 
-def maxpool2d(x,k=2,padding='SAME'):
-    y = tf.nn.max_pool(x,ksize=[1,k,k,1],strides=[1,k,k,1],padding=padding)
-    return y
+    X = tf.placeholder(tf.float32, shape=[None, n_h, n_w, n_c])
+    Y = tf.placeholder(tf.float32, shape=[None, n_y])
 
-def dropout(x,prob):
-    y = tf.nn.dropout(x,prob)
-    return y
+    return X,Y
 
-def dense(x,W,b):
-    y = tf.add(tf.matmul(W,x),b)
-    y = tf.nn.relu(y)
-    return y
-
-def flatten(x):
-    y = tf.layers.flatten(x)
-    return y
-
-def one_hot_mat(y, n_classes):
-    """
-
-    :param y: label vector
-    :param n_classes: number of different classes
-    :return: one hot tensorflow matrix
-    """
-
-    n_c = tf.constant(n_classes,name='n_classes')
-
-    one_hot_mat = tf.one_hot(y,depth=n_c,axis=0)
-
-    sess = tf.Session()
-
-    one_hot = sess.run(one_hot_mat)
-
-    sess.close()
-
-    return one_hot
-
-######################################
-"""BUILD CONVNET"""
-######################################
-
-
-def convnet(X,parameters,keep_prob):
-
-    ####FIRST CONVOLUTION LAYER####
-    conv1 = conv2d(X,parameters['fb1'],parameters['F1'],strides=1,padding='SAME')
-    conv1 = maxpool2d(conv1,k=3)
-
-    ####SECOND CONVOLUTION LAYER####
-    conv2 = conv2d(conv1,parameters['fb2'],parameters['F2'],strides=1,padding='SAME')
-    conv2 = maxpool2d(conv2,k=3)
-
-    ####THIRD CONVOLUTION LAYER####
-    conv3 = conv2d(conv2,parameters['fb3'],parameters['F3'],strides=1,padding='SAME')
-    conv3 = maxpool2d(conv3,k=3)
-
-    ####FULLY CONNECTED LAYERS####
-    fc1 = flatten(conv3)
-    s = None
-    with tf.Session() as sess:
-        s = tf.shape(fc1).eval()[0]
-        sess.close()
-    parameters['W1'] = tf.get_variable('W1',shape=[1024,s],initializer=tf.contrib.layers.xavier_initializer(seed=1))
-
-    d1= dense(fc1,parameters['W1'],parameters['b1'])
-    d1 = dropout(d1,keep_prob)
-    d2 = dense(d1,parameters['W2'],parameters['b2'])
-    d2 = dropout(d2,keep_prob)
-    out = dense(d2,parameters['W3'],parameters['b3'])
-
-    return out
-
-
-def model(X_train,Y_train,X_test,Y_test,epochs=15,batch_size=5,learning_rate=0.001):
-    tf.reset_default_graph()
-    ops.reset_default_graph()
-    tf.set_random_seed(1)
-
-    m = X_train.shape[0] #Number of training examples
-
-    ######################################
-    """CREATE PLACEHOLDER FOR GRAPH INPUT"""
-    ######################################
-
-    X = tf.placeholder(tf.float32, shape=[None, 100, 100, 3])
-    Y = tf.placeholder(tf.float32, shape=[None, 103])
-    keep_prob = tf.placeholder(tf.float32)
-    ######################################
-
+def build_parameters():
     ######################################
     """BUILD FILTERS WITH BIASES"""
     ######################################
@@ -122,7 +35,6 @@ def model(X_train,Y_train,X_test,Y_test,epochs=15,batch_size=5,learning_rate=0.0
     """BUILD WEIGHTS WITH BIASES FOR FULLY CONNECTED LAYERS"""
     ######################################
 
-    W1 = tf.get_variable('W1', shape=[1024,627200], initializer=tf.contrib.layers.xavier_initializer(seed=1))
     b1 = tf.get_variable('b1', shape=[1024, 1], initializer=tf.zeros_initializer())
 
     W2 = tf.get_variable('W2', shape=[512, 1024], initializer=tf.contrib.layers.xavier_initializer(seed=1))
@@ -140,12 +52,107 @@ def model(X_train,Y_train,X_test,Y_test,epochs=15,batch_size=5,learning_rate=0.0
                   'fb2': fb2,
                   'F3': F3,
                   'fb3': fb3,
-                  'W1': W1,
                   'b1': b1,
                   'W2': W2,
                   'b2': b2,
                   'W3': W3,
                   'b3': b3}
+
+    return parameters
+
+def conv2d(x, b, filter, strides=1, padding='SAME'):
+    x = tf.nn.conv2d(x, filter, strides=[1, strides, strides, 1], padding=padding)
+    x = tf.nn.bias_add(x, b)
+    x = tf.nn.relu(x)
+    return x
+
+def maxpool2d(x, k=2, padding='SAME'):
+    x = tf.nn.max_pool(x, ksize=[1, k, k, 1],strides=[1, k, k, 1], padding=padding)
+    return x
+
+def dropout(x, prob):
+    x = tf.nn.dropout(x, prob)
+    return x
+
+def dense(x, W, b):
+    x = tf.add(tf.matmul(W, x), b)
+    x = tf.nn.relu(x)
+    return x
+
+def flatten(x):
+    x = tf.keras.layers.Flatten()(x)
+    return x
+
+def one_hot_mat(y, n_classes):
+    """
+
+    :param y: label vector
+    :param n_classes: number of different classes
+    :return: one hot tensorflow matrix
+    """
+
+    n_c = tf.constant(n_classes, name='n_classes')
+
+    one_hot_mat = tf.one_hot(y, depth=n_c, axis=0)
+
+    sess = tf.Session()
+
+    one_hot = sess.run(one_hot_mat)
+
+    sess.close()
+
+    return one_hot
+
+######################################
+"""BUILD CONVNET"""
+######################################
+
+
+def convnet(X, parameters, keep_prob):
+
+    ####FIRST CONVOLUTION LAYER####
+    conv1 = conv2d(X, parameters['fb1'], parameters['F1'], strides=1, padding='SAME')
+    conv1 = maxpool2d(conv1, k=3)
+
+    ####SECOND CONVOLUTION LAYER####
+    conv2 = conv2d(conv1, parameters['fb2'], parameters['F2'], strides=1, padding='SAME')
+    conv2 = maxpool2d(conv2, k=3)
+
+    ####THIRD CONVOLUTION LAYER####
+    conv3 = conv2d(conv2, parameters['fb3'], parameters['F3'], strides=1, padding='SAME')
+    conv3 = maxpool2d(conv3, k=3)
+
+    ####FULLY CONNECTED LAYERS####
+    fc1 = flatten(conv3)
+
+    d1= tf.keras.layers.Dense(1024)(fc1)
+    d1 = dropout(d1, keep_prob)
+    d2 = dense(d1, parameters['W2'], parameters['b2'])
+    d2 = dropout(d2, keep_prob)
+    out = dense(d2, parameters['W3'], parameters['b3'])
+
+    return out
+
+
+def model(X_train,Y_train,X_test,Y_test,epochs=15,batch_size=5,learning_rate=0.001):
+
+    ops.reset_default_graph()
+    tf.reset_default_graph()
+    tf.set_random_seed(123)
+
+    m, n_h, n_w, n_c = X_train.shape #Number of training examples
+    n_y = Y_train.shape[1]
+
+    costs = []
+
+    ######################################
+    """CREATE PLACEHOLDER FOR GRAPH INPUT"""
+    ######################################
+
+    X,Y = create_placeholders(n_h,n_w,n_c,n_y)
+    keep_prob = tf.placeholder(tf.float32)
+
+    parameters = build_parameters()
 
     ######################################
     """BUILD PREDICTIONS AND CHECK PREDICTIONS AND DEFINE OPTIMIZATION"""
@@ -166,17 +173,17 @@ def model(X_train,Y_train,X_test,Y_test,epochs=15,batch_size=5,learning_rate=0.0
     """INITIALIZE TENSORS AND BEGIN TRAINING"""
     ######################################
 
+    tf.reset_default_graph()
+
     init = tf.global_variables_initializer()
 
     with tf.Session() as sess:
 
         sess.run(init)
 
-        total_batches = int(m / batch_size)
-
         shuffler = np.random.permutation(m)
-        X_train = X_train[shuffler,:,:,:]
-        Y_train = Y_train[shuffler,:]
+        X_shuffled = X_train[shuffler,:,:,:]
+        Y_shuffled = Y_train[shuffler,:]
         print("Shuffled shape: ",X_train.shape)
 
         for epoch in range(epochs):
@@ -184,14 +191,14 @@ def model(X_train,Y_train,X_test,Y_test,epochs=15,batch_size=5,learning_rate=0.0
             epoch_cost = 0
             mb_costs = []
 
+            total_batches = int(m / batch_size)
+
             if m % batch_size == 0:
                 for batch_num in range(total_batches):
-                    X_batch = X_train[batch_num * batch_size:batch_num * batch_size + batch_size,:,:,:]
-                    Y_batch = Y_train[batch_num * batch_size:batch_num * batch_size + batch_size,:]
-                    print(X_batch.shape)
-                    print(Y_batch.shape)
+                    X_batch = X_shuffled[batch_num * batch_size:batch_num * batch_size + batch_size,:,:,:]
+                    Y_batch = Y_shuffled[batch_num * batch_size:batch_num * batch_size + batch_size,:]
 
-                    _, mb_cost = sess.run([opt, cost], feed_dict={X: X_batch, Y: Y_batch,keep_prob:0.8})
+                    _, mb_cost = sess.run([opt, cost], feed_dict={X: X_batch, Y: Y_batch, keep_prob: 0.8})
                     mb_costs.append(mb_cost)
 
                     epoch_cost += mb_cost / total_batches
@@ -201,20 +208,15 @@ def model(X_train,Y_train,X_test,Y_test,epochs=15,batch_size=5,learning_rate=0.0
             else:
                 for batch_num in range(total_batches):
                     try:
-                        X_batch = X_train[batch_num * batch_size:batch_num * batch_size + batch_size,:,:,:]
-                        Y_batch = Y_train[batch_num * batch_size:batch_num * batch_size + batch_size,:]
-                        print(X_batch.shape)
-                        print(Y_batch.shape)
-                        _, mb_cost = sess.run([opt, cost], feed_dict={X: X_batch, Y: Y_batch, keep_prob: 0.8})
+                        X_batch = X_shuffled[batch_num * batch_size:batch_num * batch_size + batch_size,:,:,:]
+                        Y_batch = Y_shuffled[batch_num * batch_size:batch_num * batch_size + batch_size,:]
                     except:
                         try:
-                            X_batch = X_train[batch_num * batch_size:batch_num * batch_size + batch_size,:,:,:]
-                            Y_batch = Y_train[batch_num * batch_size:batch_num * batch_size + batch_size,:]
-                            print(X_batch.shape)
-                            print(Y_batch.shape)
-                            _, mb_cost = sess.run([opt, cost], feed_dict={X: X_batch, Y: Y_batch, keep_prob: 0.8})
+                            X_batch = X_shuffled[batch_num * batch_size:batch_num * batch_size + batch_size,:,:,:]
+                            Y_batch = Y_shuffled[batch_num * batch_size:batch_num * batch_size + batch_size,:]
                         except:
                             print("Error slicing minibatches")
+                    _, mb_cost = sess.run([opt, cost], feed_dict={X: X_batch, Y: Y_batch, keep_prob: 0.8})
                     plt.plot(np.squeeze(mb_costs))
                     plt.title("Minibatch Costs")
                     plt.show()
@@ -229,33 +231,30 @@ def model(X_train,Y_train,X_test,Y_test,epochs=15,batch_size=5,learning_rate=0.0
         print("Train Accuracy: ", accuracy.eval({X: X_train, Y: Y_train}))
         print("Test Accuracy: ", accuracy.eval({X: X_test, Y: Y_test}))
 
-        return parameters,epoch_cost
+        return parameters,costs
 
 
 if __name__ == "__main__":
 
-    training_data = "C:\\Users\\Juan.Zarco\\Documents\\fruits-360\\Training"
-    testing_data = "C:\\Users\\Juan.Zarco\\Documents\\fruits-360\\Test"
-
-    X_train, Y_train = build_imgdata_from_dirs(training_data)
-    X_test, Y_test = build_imgdata_from_dirs(testing_data)
+    X_train = np.load("D:\\Image Data\\Data\\X_train.npy")
+    X_test = np.load("D:\\Image Data\\Data\\X_test.npy")
+    Y_train = np.load("D:\\Image Data\\Data\\Y_train.npy")
+    Y_test = np.load("D:\\Image Data\\Data\\Y_test.npy")
 
     n_c = len(np.unique(Y_train))
 
     Y_train = one_hot_mat(Y_train, n_c).T
-    Y_test = one_hot_mat(Y_test, n_c)
+    Y_test = one_hot_mat(Y_test, n_c).T
 
     print("Shape of Y: ", Y_train.shape)
     print("Shape of X: ",X_train.shape)
 
-    print("Sample of X: ", X_train[0:1280,:,:,:].shape)
+    params, cost = model(X_train, Y_train, X_test, Y_test, epochs=15, batch_size=5, learning_rate=0.001)
 
-    #params,cost = model(X_train, Y_train, X_test, Y_test,epochs=15, batch_size=5, learning_rate=0.001)
+    plt.plot(np.squeeze(costs))
 
-    #plt.plot(np.squeeze(costs))
-
-    #plt.ylabel('cost')
-    #plt.xlabel('iterations')
-    #plt.title("Cost per iteration")
-    #plt.show()
+    plt.ylabel('cost')
+    plt.xlabel('iterations')
+    plt.title("Cost per iteration")
+    plt.show()
 

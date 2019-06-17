@@ -106,8 +106,7 @@ def compute_cost(predictions,y,loss_type=None):
         raise
 
 
-def model(X_train,X_test,Y_train,Y_test,
-          layer_dims=[],lr=0.0001,
+def model(X_train,X_test,Y_train,Y_test,layer_dims=[],lr=0.0001,
           epochs=1500,batch_size=16,print_cost=True):
 
 
